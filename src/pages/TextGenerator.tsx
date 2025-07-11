@@ -1,12 +1,14 @@
-import { useState } from 'react';
-import { Bot, Copy, Download, Wand2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bot, Copy, Download, Wand2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useToast } from '@/hooks/use-toast';
+import { HuggingFaceService, TextGenerationParams } from '@/services/huggingface';
 
 const TextGenerator = () => {
   const { t } = useLanguage();
@@ -15,6 +17,31 @@ const TextGenerator = () => {
   const [generatedText, setGeneratedText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [textType, setTextType] = useState('article');
+  const [huggingFaceService] = useState(() => new HuggingFaceService());
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Initialize HuggingFace service on component mount
+  useEffect(() => {
+    const initializeService = async () => {
+      try {
+        await huggingFaceService.initialize();
+        setIsInitialized(true);
+        toast({
+          title: "AI Model Ready!",
+          description: "Text generation model loaded successfully.",
+        });
+      } catch (error) {
+        console.error('Failed to initialize HuggingFace service:', error);
+        toast({
+          title: "Model Loading Failed",
+          description: "Using fallback text generation. Some features may be limited.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    initializeService();
+  }, [huggingFaceService, toast]);
 
   const textTypes = [
     { value: 'article', label: 'Article' },
@@ -39,21 +66,38 @@ const TextGenerator = () => {
 
     setIsGenerating(true);
     try {
-      // Simulate AI text generation - In production, you'd use HuggingFace Transformers
-      // or another AI service like OpenAI, Anthropic, etc.
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const sampleGeneratedText = `Here's a professionally generated ${textType} based on your prompt: "${prompt}"
+      if (isInitialized) {
+        // Use real HuggingFace AI
+        const params: TextGenerationParams = {
+          prompt: prompt.trim(),
+          maxLength: 300,
+          temperature: 0.7,
+          topP: 0.9,
+          repetitionPenalty: 1.1,
+          textType,
+        };
 
-This is a demonstration of the AI text generation capability. In a production environment, this would connect to advanced language models like GPT-4, Claude, or open-source alternatives through APIs such as:
+        const result = await huggingFaceService.generateText(params);
+        setGeneratedText(result.text);
+        
+        toast({
+          title: "Success!",
+          description: "Text generated using AI model.",
+        });
+      } else {
+        // Fallback to demo content
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        const fallbackText = `Here's a professionally generated ${textType} based on your prompt: "${prompt}"
 
-• HuggingFace Transformers
-• OpenAI API
+This is a demonstration of the AI text generation capability. The AI model is currently loading or unavailable, so this is fallback content.
+
+In a production environment, this would connect to advanced language models like:
+• HuggingFace Transformers (currently loading)
+• OpenAI GPT models
 • Anthropic Claude
 • Cohere API
 • Together AI
-
-The generated content would be contextually relevant, well-structured, and tailored to the specific text type you selected (${textType}).
 
 Key benefits of using our AI text generator:
 - Save hours of writing time
@@ -64,15 +108,17 @@ Key benefits of using our AI text generator:
 
 This tool can help you create compelling content for blogs, articles, emails, product descriptions, social media posts, and much more.`;
 
-      setGeneratedText(sampleGeneratedText);
-      toast({
-        title: "Success!",
-        description: "Text generated successfully.",
-      });
+        setGeneratedText(fallbackText);
+        toast({
+          title: "Demo Content Generated",
+          description: "AI model loading in background. Refresh to use real AI.",
+        });
+      }
     } catch (error) {
+      console.error('Text generation error:', error);
       toast({
         title: "Error",
-        description: "Failed to generate text. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to generate text. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -128,11 +174,26 @@ This tool can help you create compelling content for blogs, articles, emails, pr
       </div>
 
       <div className="container mx-auto max-w-4xl">
+        {/* Loading Status */}
+        {!isInitialized && (
+          <Alert className="mb-8">
+            <Sparkles className="h-4 w-4" />
+            <AlertDescription>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                <span>Loading AI text generation model... This may take a moment.</span>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-4">
             <Bot className="w-4 h-4 text-primary mr-2" />
-            <span className="text-sm font-medium text-primary">AI Text Generator</span>
+            <span className="text-sm font-medium text-primary">
+              AI Text Generator {isInitialized ? '(AI Ready)' : '(Loading...)'}
+            </span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
             AI Text Generator

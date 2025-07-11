@@ -1,12 +1,14 @@
-import { useState } from 'react';
-import { Image, Download, Wand2, Palette } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Image, Download, Wand2, Palette, Key, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useToast } from '@/hooks/use-toast';
+import { RunwareService, GenerateImageParams } from '@/services/runware';
 
 const ImageGenerator = () => {
   const { t } = useLanguage();
@@ -15,25 +17,67 @@ const ImageGenerator = () => {
   const [generatedImage, setGeneratedImage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [style, setStyle] = useState('realistic');
-  const [size, setSize] = useState('512x512');
+  const [size, setSize] = useState('1024x1024');
+  const [apiKey, setApiKey] = useState('');
+  const [runwareService, setRunwareService] = useState<RunwareService | null>(null);
+  const [showApiKeyInput, setShowApiKeyInput] = useState(true);
+  const [generatedImageData, setGeneratedImageData] = useState<any>(null);
+
+  // Load API key from localStorage on component mount
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('runware-api-key');
+    if (savedApiKey) {
+      setApiKey(savedApiKey);
+      setShowApiKeyInput(false);
+      setRunwareService(new RunwareService(savedApiKey));
+    }
+  }, []);
 
   const styles = [
-    { value: 'realistic', label: 'Realistic' },
-    { value: 'artistic', label: 'Artistic' },
-    { value: 'cartoon', label: 'Cartoon' },
-    { value: 'anime', label: 'Anime' },
-    { value: 'oil-painting', label: 'Oil Painting' },
-    { value: 'watercolor', label: 'Watercolor' },
-    { value: 'digital-art', label: 'Digital Art' },
-    { value: 'fantasy', label: 'Fantasy' },
+    { value: 'realistic', label: 'Realistic', model: 'runware:100@1' },
+    { value: 'artistic', label: 'Artistic', model: 'runware:100@1' },
+    { value: 'cartoon', label: 'Cartoon', model: 'runware:100@1' },
+    { value: 'anime', label: 'Anime', model: 'runware:100@1' },
+    { value: 'oil-painting', label: 'Oil Painting', model: 'runware:100@1' },
+    { value: 'watercolor', label: 'Watercolor', model: 'runware:100@1' },
+    { value: 'digital-art', label: 'Digital Art', model: 'runware:100@1' },
+    { value: 'fantasy', label: 'Fantasy', model: 'runware:100@1' },
   ];
 
   const sizes = [
-    { value: '256x256', label: '256×256 (Small)' },
-    { value: '512x512', label: '512×512 (Medium)' },
-    { value: '1024x1024', label: '1024×1024 (Large)' },
-    { value: '1920x1080', label: '1920×1080 (HD)' },
+    { value: '512x512', label: '512×512 (Small)', width: 512, height: 512 },
+    { value: '1024x1024', label: '1024×1024 (Medium)', width: 1024, height: 1024 },
+    { value: '1024x768', label: '1024×768 (Landscape)', width: 1024, height: 768 },
+    { value: '768x1024', label: '768×1024 (Portrait)', width: 768, height: 1024 },
+    { value: '1920x1080', label: '1920×1080 (HD)', width: 1920, height: 1080 },
   ];
+
+  const handleApiKeySubmit = () => {
+    if (!apiKey.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter your Runware API key.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      localStorage.setItem('runware-api-key', apiKey);
+      setRunwareService(new RunwareService(apiKey));
+      setShowApiKeyInput(false);
+      toast({
+        title: "Success!",
+        description: "API key configured successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to initialize Runware service.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const generateImage = async () => {
     if (!prompt.trim()) {
@@ -45,27 +89,48 @@ const ImageGenerator = () => {
       return;
     }
 
+    if (!runwareService) {
+      toast({
+        title: "Error",
+        description: "Please configure your Runware API key first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsGenerating(true);
     try {
-      // Simulate AI image generation - In production, you'd use:
-      // - HuggingFace Diffusers
-      // - Replicate API
-      // - DALL-E API
-      // - Midjourney API
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      const selectedStyle = styles.find(s => s.value === style);
+      const selectedSize = sizes.find(s => s.value === size);
       
-      // Generate a placeholder image URL (in production, this would be the actual generated image)
-      const placeholderImage = `https://picsum.photos/${size.replace('x', '/')}?random=${Date.now()}`;
-      setGeneratedImage(placeholderImage);
+      // Create style-enhanced prompt
+      const stylePrompt = `${prompt}, ${style} style, high quality, detailed`;
+      
+      const params: GenerateImageParams = {
+        positivePrompt: stylePrompt,
+        model: selectedStyle?.model || 'runware:100@1',
+        width: selectedSize?.width || 1024,
+        height: selectedSize?.height || 1024,
+        numberResults: 1,
+        outputFormat: 'WEBP',
+        CFGScale: 7,
+        scheduler: 'FlowMatchEulerDiscreteScheduler',
+        strength: 0.8,
+      };
+
+      const result = await runwareService.generateImage(params);
+      setGeneratedImage(result.imageURL);
+      setGeneratedImageData(result);
       
       toast({
         title: "Success!",
-        description: "Image generated successfully.",
+        description: `Image generated successfully! Cost: $${result.cost.toFixed(4)}`,
       });
     } catch (error) {
+      console.error('Image generation error:', error);
       toast({
         title: "Error",
-        description: "Failed to generate image. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to generate image. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -112,11 +177,41 @@ const ImageGenerator = () => {
       </div>
 
       <div className="container mx-auto max-w-6xl">
+        {/* API Key Configuration */}
+        {showApiKeyInput && (
+          <Alert className="mb-8">
+            <Key className="h-4 w-4" />
+            <AlertDescription>
+              <div className="space-y-4">
+                <div>
+                  <p className="font-medium mb-2">Configure Runware API Key</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    To use real AI image generation, you need a Runware API key. 
+                    Get yours at <a href="https://runware.ai/" target="_blank" rel="noopener noreferrer" className="text-primary underline">runware.ai</a>
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      placeholder="Enter your Runware API key..."
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button onClick={handleApiKeySubmit}>
+                      Configure
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-4">
             <Image className="w-4 h-4 text-primary mr-2" />
-            <span className="text-sm font-medium text-primary">AI Image Generator</span>
+            <span className="text-sm font-medium text-primary">AI Image Generator {runwareService && '(Connected)'}</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
             AI Image Generator

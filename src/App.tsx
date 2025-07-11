@@ -9,6 +9,8 @@ import { Header } from "@/components/Header";
 import Index from "./pages/Index";
 import TextGenerator from "./pages/TextGenerator";
 import ImageGenerator from "./pages/ImageGenerator";
+import PDFConverter from "./pages/PDFConverter";
+import YouTubeDownloader from "./pages/YouTubeDownloader";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +29,8 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 <Route path="/tools/text-generator" element={<TextGenerator />} />
                 <Route path="/tools/image-generator" element={<ImageGenerator />} />
+                <Route path="/tools/pdf-converter" element={<PDFConverter />} />
+                <Route path="/tools/youtube-downloader" element={<YouTubeDownloader />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
